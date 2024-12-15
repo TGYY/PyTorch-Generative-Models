@@ -4,11 +4,12 @@ from torch import Tensor
 from pathlib import Path
 from typing import List, Optional, Sequence, Union, Any, Callable
 from torchvision.datasets.folder import default_loader
-from pytorch_lightning import LightningDataModule
+from lightning import LightningDataModule
 from torch.utils.data import DataLoader, Dataset
 from torchvision import transforms
 from torchvision.datasets import CelebA
 import zipfile
+import numpy as np
 
 
 # Add your custom dataset class here
@@ -61,7 +62,7 @@ class OxfordPets(Dataset):
         if self.transforms is not None:
             img = self.transforms(img)
         
-        return img, 0.0 # dummy datat to prevent breaking 
+        return img, 0.0 # dummy data to prevent breaking 
 
 class VAEDataset(LightningDataModule):
     """
@@ -96,6 +97,7 @@ class VAEDataset(LightningDataModule):
         self.patch_size = patch_size
         self.num_workers = num_workers
         self.pin_memory = pin_memory
+        self.dataset_var = None
 
     def setup(self, stage: Optional[str] = None) -> None:
 #       =========================  OxfordPets Dataset  =========================
@@ -129,12 +131,14 @@ class VAEDataset(LightningDataModule):
         train_transforms = transforms.Compose([transforms.RandomHorizontalFlip(),
                                               transforms.CenterCrop(148),
                                               transforms.Resize(self.patch_size),
-                                              transforms.ToTensor(),])
+                                              transforms.ToTensor(),
+                                              transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])])
         
         val_transforms = transforms.Compose([transforms.RandomHorizontalFlip(),
                                             transforms.CenterCrop(148),
                                             transforms.Resize(self.patch_size),
-                                            transforms.ToTensor(),])
+                                            transforms.ToTensor(),
+                                            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])])
         
         self.train_dataset = MyCelebA(
             self.data_dir,
@@ -142,7 +146,10 @@ class VAEDataset(LightningDataModule):
             transform=train_transforms,
             download=False,
         )
-        
+        # size == 40 ?
+        # self.dataset_var = self.train_dataset.attr.float().var(dim=0)  # Calculate the variance of the attributes
+        self.dataset_var = 1
+
         # Replace CelebA with your dataset
         self.val_dataset = MyCelebA(
             self.data_dir,
@@ -173,7 +180,7 @@ class VAEDataset(LightningDataModule):
     def test_dataloader(self) -> Union[DataLoader, List[DataLoader]]:
         return DataLoader(
             self.val_dataset,
-            batch_size=144,
+            batch_size=36,
             num_workers=self.num_workers,
             shuffle=True,
             pin_memory=self.pin_memory,

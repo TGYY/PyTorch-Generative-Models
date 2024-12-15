@@ -5,7 +5,7 @@ model_params:
   latent_dim: 128
 
 data_params:
-  data_path: "Data/"
+  data_path: "/data0/canbin"
   train_batch_size: 64
   val_batch_size:  64
   patch_size: 64
@@ -19,10 +19,14 @@ exp_params:
   kld_weight: 0.00025
   manual_seed: 1265
 
-trainer_params:
-  gpus: [1]
-  max_epochs: 10
-
 logging_params:
   save_dir: "logs/"
   name: "ConditionalVAE"
+
+gpu_params:
+  accelerator: 'gpu'
+  devices: [2, 3]
+
+test_run_config:
+  limit_train_batches: 0.1
+  limit_val_batches: 1

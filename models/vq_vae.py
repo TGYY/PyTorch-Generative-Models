@@ -19,29 +19,34 @@ class VectorQuantizer(nn.Module):
         self.beta = beta
 
         self.embedding = nn.Embedding(self.K, self.D)
-        self.embedding.weight.data.uniform_(-1 / self.K, 1 / self.K)
+        # self.embedding.weight.data.uniform_(-1 / self.K, 1 / self.K)    # initialize embedding
 
     def forward(self, latents: Tensor) -> Tensor:
-        latents = latents.permute(0, 2, 3, 1).contiguous()  # [B x D x H x W] -> [B x H x W x D]
-        latents_shape = latents.shape
-        flat_latents = latents.view(-1, self.D)  # [BHW x D]
+        flat_latents = latents.permute(0, 2, 3, 1).reshape(-1, self.D)  # [BHW x D]
 
         # Compute L2 distance between latents and embedding weights
+        # dist = torch.sum(flat_latents ** 2, dim=1, keepdim=True) + \
+        #        torch.sum(self.embedding.weight ** 2, dim=1, keepdim=True) - \
+        #        2 * torch.matmul(flat_latents, self.embedding.weight.t())  # [BHW x K]
+
         dist = torch.sum(flat_latents ** 2, dim=1, keepdim=True) + \
-               torch.sum(self.embedding.weight ** 2, dim=1) - \
+               torch.sum(self.embedding.weight.t() ** 2, dim=0, keepdim=True) - \
                2 * torch.matmul(flat_latents, self.embedding.weight.t())  # [BHW x K]
 
         # Get the encoding that has the min distance
         encoding_inds = torch.argmin(dist, dim=1).unsqueeze(1)  # [BHW, 1]
+        quantized_latents = F.embedding(
+            encoding_inds.view(latents.shape[0], *latents.shape[2:]), self.embedding.weight
+        ).permute(0, 3, 1, 2)
 
-        # Convert to one-hot encodings
-        device = latents.device
-        encoding_one_hot = torch.zeros(encoding_inds.size(0), self.K, device=device)
-        encoding_one_hot.scatter_(1, encoding_inds, 1)  # [BHW x K]
+        # # Convert to one-hot encodings
+        # device = latents.device
+        # encoding_one_hot = torch.zeros(encoding_inds.size(0), self.K, device=device)
+        # encoding_one_hot.scatter_(1, encoding_inds, 1)  # [BHW x K]
 
-        # Quantize the latents
-        quantized_latents = torch.matmul(encoding_one_hot, self.embedding.weight)  # [BHW, D]
-        quantized_latents = quantized_latents.view(latents_shape)  # [B x H x W x D]
+        # # Quantize the latents
+        # quantized_latents = torch.matmul(encoding_one_hot, self.embedding.weight)  # [BHW, D]
+        # quantized_latents = quantized_latents.view(latents_shape)  # [B x H x W x D]
 
         # Compute the VQ Losses
         commitment_loss = F.mse_loss(quantized_latents.detach(), latents)
@@ -49,10 +54,11 @@ class VectorQuantizer(nn.Module):
 
         vq_loss = commitment_loss * self.beta + embedding_loss
 
-        # Add the residue back to the latents
+        # Add the residue back to the latents,  implements the “straight-through estimator”. 
+        # It passes gradients back to the original latent input while using the quantized values in the forward pass. 
         quantized_latents = latents + (quantized_latents - latents).detach()
 
-        return quantized_latents.permute(0, 3, 1, 2).contiguous(), vq_loss  # [B x D x H x W]
+        return quantized_latents, vq_loss  # [B x D x H x W]
 
 class ResidualLayer(nn.Module):
 
@@ -79,6 +85,7 @@ class VQVAE(BaseVAE):
                  hidden_dims: List = None,
                  beta: float = 0.25,
                  img_size: int = 64,
+                 dataset_var: float = 1,
                  **kwargs) -> None:
         super(VQVAE, self).__init__()
 
@@ -86,6 +93,7 @@ class VQVAE(BaseVAE):
         self.num_embeddings = num_embeddings
         self.img_size = img_size
         self.beta = beta
+        self.dataset_var = dataset_var
 
         modules = []
         if hidden_dims is None:
@@ -173,7 +181,7 @@ class VQVAE(BaseVAE):
         :return: (Tensor) List of latent codes
         """
         result = self.encoder(input)
-        return [result]
+        return [result] # for consistency with other model's code
 
     def decode(self, z: Tensor) -> Tensor:
         """
@@ -205,10 +213,10 @@ class VQVAE(BaseVAE):
 
         recons_loss = F.mse_loss(recons, input)
 
-        loss = recons_loss + vq_loss
+        loss = recons_loss / self.dataset_var + vq_loss
         return {'loss': loss,
-                'Reconstruction_Loss': recons_loss,
-                'VQ_Loss':vq_loss}
+                'Reconstruction_Loss': recons_loss.detach(),
+                'VQ_Loss':vq_loss.detach()}
 
     def sample(self,
                num_samples: int,
