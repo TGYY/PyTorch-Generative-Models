@@ -6,8 +6,6 @@ from .types_ import *
 
 
 class VanillaVAE(BaseVAE):
-
-
     def __init__(self,
                  in_channels: int,
                  latent_dim: int,
@@ -56,8 +54,6 @@ class VanillaVAE(BaseVAE):
                     nn.BatchNorm2d(hidden_dims[i + 1]),
                     nn.LeakyReLU())
             )
-
-
 
         self.decoder = nn.Sequential(*modules)
 
@@ -126,7 +122,6 @@ class VanillaVAE(BaseVAE):
                       **kwargs) -> dict:
         """
         Computes the VAE loss function.
-        KL(N(\mu, \sigma), N(0, 1)) = \log \frac{1}{\sigma} + \frac{\sigma^2 + \mu^2}{2} - \frac{1}{2}
         :param args:
         :param kwargs:
         :return:
@@ -143,20 +138,18 @@ class VanillaVAE(BaseVAE):
         kld_loss = torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
 
         loss = recons_loss + kld_weight * kld_loss
-        return {'loss': loss, 'Reconstruction_Loss':recons_loss.detach(), 'KLD':-kld_loss.detach()}
+        return {'loss': loss, 'Reconstruction_Loss':recons_loss.detach(), 'KLD_Loss':kld_loss.detach()}
 
     def sample(self,
                num_samples:int,
                current_device: int, **kwargs) -> Tensor:
         """
-        Samples from the latent space and return the corresponding
-        image space map.
+        Samples from the latent space and return the corresponding image space map.
         :param num_samples: (Int) Number of samples
         :param current_device: (Int) Device to run the model
         :return: (Tensor)
         """
-        z = torch.randn(num_samples,
-                        self.latent_dim)
+        z = torch.randn(num_samples, self.latent_dim)
 
         z = z.to(current_device)
 

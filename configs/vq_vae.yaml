@@ -5,26 +5,35 @@ model_params:
   num_embeddings: 512
   img_size: 64
   beta: 0.25
+  dataset_var: 1
+  residual_hidden_channels: 32
+  epsilon: 0.00001
+  use_ema: True
+  decay: 0.99
 
 data_params:
-  data_path: "Data/"
-  train_batch_size: 64
-  val_batch_size:  64
-  patch_size: 64
+  data_path: "/data0/canbin/dataset"
+  train_batch_size: 32
+  val_batch_size:  32
+  patch_size: 32
   num_workers: 4
 
 
 exp_params:
-  LR: 0.005
-  weight_decay: 0.0
-  scheduler_gamma: 0.0
+  LR: 0.0003
+  weight_decay: 0
+  scheduler_gamma: 0.95
   kld_weight: 0.00025
   manual_seed: 1265
 
-trainer_params:
-  gpus: [1]
-  max_epochs: 10
-
 logging_params:
   save_dir: "logs/"
-  name: 'VQVAE'
+  name: "VQVAE"
+
+gpu_params:
+  accelerator: 'gpu'
+  devices: [2, 3]
+
+test_run_config:
+  limit_train_batches: 0.1
+  limit_val_batches: 1
