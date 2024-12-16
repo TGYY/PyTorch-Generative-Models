@@ -6,18 +6,22 @@ model_params:
   img_size: 64
   beta: 0.25
   dataset_var: 1
+  residual_hidden_channels: 32
+  epsilon: 0.00001
+  use_ema: True
+  decay: 0.99
 
 data_params:
-  data_path: "/data0/canbin"
-  train_batch_size: 64
-  val_batch_size:  64
+  data_path: "/data0/canbin/dataset"
+  train_batch_size: 32
+  val_batch_size:  32
   patch_size: 32
   num_workers: 4
 
 
 exp_params:
-  LR: 0.0005
-  weight_decay: 0.99
+  LR: 0.0003
+  weight_decay: 0
   scheduler_gamma: 0.95
   kld_weight: 0.00025
   manual_seed: 1265

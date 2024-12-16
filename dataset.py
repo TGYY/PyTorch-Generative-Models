@@ -10,7 +10,7 @@ from torchvision import transforms
 from torchvision.datasets import CelebA
 import zipfile
 import numpy as np
-
+from torchvision import datasets, transforms
 
 # Add your custom dataset class here
 class MyDataset(Dataset):
@@ -97,7 +97,12 @@ class VAEDataset(LightningDataModule):
         self.patch_size = patch_size
         self.num_workers = num_workers
         self.pin_memory = pin_memory
-        self.dataset_var = None
+        self.dataset_var = 1
+
+    def prepare_data(self):
+        # Download CIFAR-10 dataset
+        datasets.CIFAR10(root=self.data_dir, train=True, download=True)
+        datasets.CIFAR10(root=self.data_dir, train=False, download=True)
 
     def setup(self, stage: Optional[str] = None) -> None:
 #       =========================  OxfordPets Dataset  =========================
@@ -125,40 +130,67 @@ class VAEDataset(LightningDataModule):
 #             split='val',
 #             transform=val_transforms,
 #         )
-        
-#       =========================  CelebA Dataset  =========================
-    
-        train_transforms = transforms.Compose([transforms.RandomHorizontalFlip(),
-                                              transforms.CenterCrop(148),
-                                              transforms.Resize(self.patch_size),
-                                              transforms.ToTensor(),
-                                              transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])])
-        
-        val_transforms = transforms.Compose([transforms.RandomHorizontalFlip(),
-                                            transforms.CenterCrop(148),
-                                            transforms.Resize(self.patch_size),
-                                            transforms.ToTensor(),
-                                            transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])])
-        
-        self.train_dataset = MyCelebA(
-            self.data_dir,
-            split='train',
-            transform=train_transforms,
-            download=False,
-        )
-        # size == 40 ?
-        # self.dataset_var = self.train_dataset.attr.float().var(dim=0)  # Calculate the variance of the attributes
-        self.dataset_var = 1
 
-        # Replace CelebA with your dataset
-        self.val_dataset = MyCelebA(
-            self.data_dir,
-            split='test',
-            transform=val_transforms,
-            download=False,
-        )
-#       ===============================================================
+#       =========================  CelebA Dataset  =========================
+
+        # Consists 200,000 celebrity color images of size 218x178 pixels, each with 40 attribute annotations.  
+
+        # train_transforms = transforms.Compose([transforms.RandomHorizontalFlip(),
+        #                                       transforms.CenterCrop(148),
+        #                                       transforms.Resize(self.patch_size),
+        #                                       transforms.ToTensor(),
+        #                                       transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])])
         
+        # val_transforms = transforms.Compose([transforms.RandomHorizontalFlip(),
+        #                                     transforms.CenterCrop(148),
+        #                                     transforms.Resize(self.patch_size),
+        #                                     transforms.ToTensor(),
+        #                                     transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])])
+
+        # self.dataset_var = 1
+        
+        # self.train_dataset = MyCelebA(
+        #     self.data_dir,
+        #     split='train',
+        #     transform=train_transforms,
+        #     download=False,
+        # )
+
+        # # Replace CelebA with your dataset
+        # self.val_dataset = MyCelebA(
+        #     self.data_dir,
+        #     split='test',
+        #     transform=val_transforms,
+        #     download=False,
+        # )
+
+#       =========================  Cifar-10 Dataset  =========================
+
+        # Consists of 60,000 color images of size 32x32 pixels, divided into 10 classes.
+
+        normalize = transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
+        self.train_transforms = transforms.Compose([
+            transforms.ToTensor(),
+            normalize
+        ])
+        
+        self.val_transforms = transforms.Compose([
+            transforms.ToTensor(),
+            normalize
+        ])
+
+        self.train_dataset = datasets.CIFAR10(
+            root=self.data_dir, train=True, transform=self.train_transforms
+        )
+
+        self.val_dataset = datasets.CIFAR10(
+            root=self.data_dir, train=False, transform=self.val_transforms
+        )
+
+        self.dataset_var = np.var(self.train_dataset.data / 255)
+
+#       =============================================================== 
+
     def train_dataloader(self) -> DataLoader:
         return DataLoader(
             self.train_dataset,

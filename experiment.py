@@ -11,7 +11,28 @@ from torch.utils.data import DataLoader
 from lightning.pytorch.callbacks import Callback
 from lightning.pytorch.loggers import WandbLogger
 import torch
-import wandb
+from PIL import Image
+import numpy as np
+
+def save_img_tensors_as_grid(img_tensors, nrows, f):
+    img_tensors = img_tensors.permute(0, 2, 3, 1)
+    imgs_array = img_tensors.detach().cpu().numpy()
+    imgs_array[imgs_array < -0.5] = -0.5
+    imgs_array[imgs_array > 0.5] = 0.5
+    imgs_array = 255 * (imgs_array + 0.5)
+    (batch_size, img_size) = img_tensors.shape[:2]
+    ncols = batch_size // nrows
+    img_arr = np.zeros((nrows * batch_size, ncols * batch_size, 3))
+    for idx in range(36):
+        row_idx = idx // ncols
+        col_idx = idx % ncols
+        row_start = row_idx * img_size
+        row_end = row_start + img_size
+        col_start = col_idx * img_size
+        col_end = col_start + img_size
+        img_arr[row_start:row_end, col_start:col_end] = imgs_array[idx]
+
+    Image.fromarray(img_arr.astype(np.uint8), "RGB").save(f"{f}.jpg")
 
 class VAEXperiment(pl.LightningModule):
 
@@ -25,11 +46,11 @@ class VAEXperiment(pl.LightningModule):
         self.params = params
         self.curr_device = None
         self.save_hyperparameters(ignore=['vae_model'])
-        self.hold_graph = False
-        try:
-            self.hold_graph = self.params['retain_first_backpass']
-        except:
-            pass
+        # self.hold_graph = False
+        # try:
+        #     self.hold_graph = self.params['retain_first_backpass']
+        # except:
+        #     pass
 
     def forward(self, input: Tensor, **kwargs) -> Tensor:
         return self.model(input, **kwargs)
@@ -100,34 +121,35 @@ class VAEXperiment(pl.LightningModule):
 
         optimizer = optim.Adam(self.model.parameters(),
                                lr=self.params['LR'],
-                               weight_decay=self.params['weight_decay'])
+                               weight_decay=0)
         optims.append(optimizer)
-        # Check if more than 1 optimizer is required (Used for adversarial training)
-        try:
-            if self.params['LR_2'] is not None:
-                optimizer2 = optim.Adam(getattr(self.model,self.params['submodel']).parameters(),
-                                        lr=self.params['LR_2'])
-                optims.append(optimizer2)
-        except:
-            pass
+        # # Check if more than 1 optimizer is required (Used for adversarial training)
+        # try:
+        #     if self.params['LR_2'] is not None:
+        #         optimizer2 = optim.Adam(getattr(self.model,self.params['submodel']).parameters(),
+        #                                 lr=self.params['LR_2'])
+        #         optims.append(optimizer2)
+        # except:
+        #     pass
 
-        try:
-            if self.params['scheduler_gamma'] is not None:
-                scheduler = optim.lr_scheduler.ExponentialLR(optims[0],
-                                                             gamma = self.params['scheduler_gamma'])
-                scheds.append(scheduler)
+        # try:
+        #     if self.params['scheduler_gamma'] is not None:
+        #         scheduler = optim.lr_scheduler.ExponentialLR(optims[0],
+        #                                                      gamma = self.params['scheduler_gamma'])
+        #         scheds.append(scheduler)
 
-                # Check if another scheduler is required for the second optimizer
-                try:
-                    if self.params['scheduler_gamma_2'] is not None:
-                        scheduler2 = optim.lr_scheduler.ExponentialLR(optims[1],
-                                                                      gamma = self.params['scheduler_gamma_2'])
-                        scheds.append(scheduler2)
-                except:
-                    pass
-                return optims, scheds
-        except:
-            return optims
+        #         # Check if another scheduler is required for the second optimizer
+        #         try:
+        #             if self.params['scheduler_gamma_2'] is not None:
+        #                 scheduler2 = optim.lr_scheduler.ExponentialLR(optims[1],
+        #                                                               gamma = self.params['scheduler_gamma_2'])
+        #                 scheds.append(scheduler2)
+        #         except:
+        #             pass
+        #         return optims, scheds
+        # except:
+        #     pass
+        return optims
 
 
 class LogSampleCallback(Callback):
@@ -181,7 +203,7 @@ class LogSampleCallback(Callback):
             f"recons_{trainer.logger.name}_Epoch_{trainer.current_epoch}.png"
         )
         vutils.save_image(
-            (recons.data + 1) * 127.5,  # Normalize from [-1, 1] to [0, 255]
+            recons.data,  # Normalize from [-1, 1] to [0, 255]
             recon_file,
             normalize=True,
             nrow=self.nrow
@@ -194,6 +216,8 @@ class LogSampleCallback(Callback):
                 images=recons_imgs
             )
 
+        save_img_tensors_as_grid(test_input.data, 6, "true")
+        save_img_tensors_as_grid(recons.data, 6, "recon")
         # test_labels = [torch.nonzero(label).squeeze().tolist() for label in list(torch.unbind(test_label, dim=0))]
         # test_labels = [list(map(str, label)) for label in test_labels]
         # Generate samples

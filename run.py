@@ -44,7 +44,7 @@ wandb_logger = WandbLogger(
 # For reproducibility
 seed_everything(config['exp_params']['manual_seed'], workers=True)
 
-pin_memory = True
+pin_memory = False
 data = VAEDataset(**config["data_params"], pin_memory=pin_memory)
 data.setup()
 config['model_params']['dataset_var'] = data.dataset_var
@@ -82,7 +82,7 @@ runner = Trainer(
     ],
     strategy=DDPStrategy(find_unused_parameters=False),
     **config['gpu_params'],
-    max_epochs=10,
+    max_epochs=5,
     # **config['test_run_config']
 )
 
